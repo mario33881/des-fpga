@@ -1,0 +1,3 @@
+module k9(output [48:1] out);
+    assign out = 48'b000101110101000011001011000010001000100101100011;
+endmodule

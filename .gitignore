@@ -1,0 +1,46 @@
+.vscode
+
+__pycache__
+
+tests/*.out
+tests/*.vcd
+tests/sim_build
+tests/results.xml
+
+utility/*/*.v
+
+######
+
+# LaTeX
+
+docs/author.tex
+
+docs/*.pdf_tex
+
+docs/*.fls
+
+docs/svg-inkscape
+
+# LaTeX temporary files
+docs/*.aux
+docs/*.log
+docs/*.toc
+
+# PDF output - usually a bad idea to keep this in Git
+docs/*.pdf
+
+# Latexmk
+docs/*.fdb_latexmk
+
+# SyncTeX
+docs/*.synctex.gz
+
+# LaTeX Beamer
+docs/*.snm
+docs/*.vrb
+docs/*.nav
+docs/*.out
+
+# BibTeX
+docs/*.bbl
+docs/*.blg

@@ -1,0 +1,3 @@
+module k11(output [48:1] out);
+    assign out = 48'b000111000110100110001101010010010000010111010000;
+endmodule

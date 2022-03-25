@@ -1,0 +1,3 @@
+module k3(output [48:1] out);
+    assign out = 48'b111100000011010001110110000001110000011010000110;
+endmodule

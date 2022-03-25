@@ -1,0 +1,3 @@
+module k8(output [48:1] out);
+    assign out = 48'b101010110101000110011000010010100111001000000010;
+endmodule

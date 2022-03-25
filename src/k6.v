@@ -1,0 +1,3 @@
+module k6(output [48:1] out);
+    assign out = 48'b101011101001000101010011010100101010010110000000;
+endmodule

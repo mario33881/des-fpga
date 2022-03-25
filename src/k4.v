@@ -1,0 +1,3 @@
+module k4(output [48:1] out);
+    assign out = 48'b111001001100011001010000100111000000000111000001;
+endmodule
