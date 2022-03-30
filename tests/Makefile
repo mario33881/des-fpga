@@ -1,11 +1,6 @@
 
 test:
-	$(MAKE) test_DES
 	$(MAKE) test_FSMD
-
-test_DES:
-	$(MAKE) clean
-	make -f Makefile_DES
 
 test_FSMD:
 	$(MAKE) clean

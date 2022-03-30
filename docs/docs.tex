@@ -11,6 +11,7 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 
+\newcommand\XOR{\mathbin{\char`\^}}
 \setcounter{MaxMatrixCols}{16}
 
 \title{Implementazione Algoritmo DES su FPGA}
@@ -35,16 +36,13 @@ e come comandarla tramite il linguaggio di programmazione Python.
 
 A fine documento saranno elencate le scelte progettuali.
 
-\alertinfo{Per brevita' il seguente documento utilizzera' in modo intercambiabile il percorso dei file sorgente Verilog e il nome dei moduli definiti al loro interno: il nome dei moduli corrisponde al nome del file (senza estensione).}
+\alertinfo{Per brevità il seguente documento utilizzerà in modo intercambiabile il percorso dei file sorgente Verilog e il nome dei moduli definiti al loro interno: il nome dei moduli corrisponde al nome del file (senza estensione).}
 
 \section{Algoritmo DES}
 L'algoritmo DES e' un algoritmo che, data una chiave da 64 bit (in questo caso implementata in hardware), 
 si occupa di cifrare una sequenza di 64 bit restituendo in output altri 64 bit da cui risulta molto difficile risalire alla sequenza originale.
 
-Per sviluppare l'algoritmo DES in Verilog si e' deciso di implementare l'algoritmo vero e proprio in un datapath e poi di gestire gli input e gli output mediante macchina a stati finiti (FSM).
-
-\subsection{Datapath dell'Algoritmo DES}
-Il datapath, implementato nel file $src/DES.v$, si occupa di:
+L'algoritmo DES consiste nel:
 \begin{itemize}
     \item Fare una permutazione iniziale (gestita dal modulo $src/IP.v$) dell'input. Con la permutazione si ottiene una nuova sequenza di 64 bit formata dagli stessi bit del messaggio da cifrare ma in un ordine diverso.
     \item Eseguire 16 round in cui si prende l'output del round precedente (o della permutazione iniziale) e si suddivide in due parti uguali da 32 bit ($L_{n-1}$ e $R_{n-1}$).
@@ -67,14 +65,10 @@ Il datapath, implementato nel file $src/DES.v$, si occupa di:
 
 \includesvg{assets/des_main}
 
-I round sono stati implementati nel file $src/DES.v$ mentre ogni funzione $f(R_{n-1}, K_n)$ (per $n = 1 .. 16$) e' descritta nei relativi file $src/f\_kn.v$ (per ogni $n = 1 .. 16$).
-
-\alertinfo{E' possibile trovare la funzione $f(R_0, K_1)$ nel file $src/f\_k1.v$, la funzione $f(R_1, K_2)$ nel file $src/f\_k2.v$, \dots}
-
-Tutti i file $src/f\_kn.v$ utilizzano istanze di due moduli differenti:
+Per calcolare l'output di un round si utilizzano istanze dei seguenti moduli:
 \begin{itemize}
     \item $src/f.v$ che, presi in ingresso $R_{n-1}$ e $K_{n}$, restituisce il risultato di $f(R_{n-1}, K_n)$
-    \item $src/kn.v$ (dove $n$ e' il numero del round corrente) che restituisce $K_n$, valore che dipende da una computazione effettuata sulla chiave.
+    \item $src/K\_selector.v$ che seleziona e restituisce $K_n$ (output del modulo $src/kn.v$, dove $n$ e' il numero del round corrente), valore che dipende da una computazione effettuata sulla chiave.
 
           \alertinfo{
               Siccome, in questo progetto, la chiave viene memorizzata in hardware e la sua computazione restituisce sempre gli stessi $K_n$
@@ -112,36 +106,63 @@ In termini matematici:
 
 $$f(R_{n-1}, K_n) = P(Sboxes(E(R_{n-1}) \oplus K_n))$$
 
-Dove la funzione $Sboxes()$ e' una astrazione di cio' che ovviene in ogni modulo $S_x$ (per $x = 1 .. 8$).
+Dove la funzione $Sboxes()$ e' una astrazione di ciò che avviene in ogni modulo $S_x$ (per $x = 1 .. 8$).
 
 \includesvg{assets/des_f}
 
-\alertinfo{I Moduli $K_n$, le S-Boxes, i moduli che si occupano di permutare segnali $(IP, inverse\_IP, E, P)$ e le funzioni $f\_kn$ sono stati generati mediante script Python, che risiedono nella cartella $utility$, per rimuovere la possibilita' di errore umano durante la realizzazione di quei moduli.}
+\alertinfo{I Moduli $K_n$, le S-Boxes e i moduli che si occupano di permutare segnali $(IP, inverse\_IP, E, P)$ sono stati generati mediante script Python, che risiedono nella cartella $utility$, per rimuovere la possibilità di errore umano durante la realizzazione di quei moduli.}
 
-\subsection{FSM dell'Algoritmo DES}
+\section{Implementazione Verilog dell'Algoritmo DES}
 
 A causa delle limitazioni di bit di input/output della FPGA la macchina a stati e' stata realizzata per ricevere in ingresso il messaggio da cifrare in due stati differenti (vengono letti 32 bit alla volta).
 
-Questo permette di impiegare 32 bit di messaggio e 2 di controllo anziche' utilizzare 64 bit di messaggio.
+Questo permette di impiegare 32 bit di messaggio e 2 di controllo anziché utilizzare 64 bit di messaggio.
 
-La macchina a stati, implementata nel file $src/FSMD.v$ (poiche' implementa FSM + Datapath), esegue queste operazioni:
+La macchina a stati, implementata nel file $src/FSMD.v$ (poiché implementa FSM + Datapath), esegue queste operazioni:
 \begin{itemize}
     \item Resetta i registri interni quando entra in ingresso il segnale di reset rst impostato a 0.
     
-        \alertinfo{I registri resettati servono per memorizzare il messaggio da cifrare e l'output del datapath e per indicare lo stato delle operazioni (memorizzazione effettuata della prima parte del messaggio, fine)}
+        \alertinfo{I registri resettati servono per memorizzare il messaggio da cifrare, gli output della FSMD (memorizzazione effettuata della prima parte del messaggio, fine) e dei moduli intermedi.}
 
     \item Attende che in ingresso sia presente la prima parte del messaggio da cifrare. La FSM riconosce che il messaggio e' pronto quando $ready\_part1$ e' posto a 1.
     \item La FSM manda in uscita il segnale $read\_part1$ indicando che la prima parte del messaggio da cifrare e' stata memorizzata.
           
           Dopo aver fatto questo attende che in ingresso sia presente la seconda parte del messaggio da cifrare. La FSM riconosce che il messaggio e' pronto quando $ready\_part2$ e' posto a 1.
-    \item Dopo aver lasciato al datapath il compito di fare la cifratura del messaggio in input, la FSM manda in uscita il messaggio cifrato sul segnale $enc\_msg$ e imposta il segnale $done$ a 1 per indicare che l'operazione e' conclusa.
+    
+    \item Effettua la permutazione iniziale sull'intero messaggio in input (ottenuto concatenando le due parti)
+          
+        \alertinfo{La permutazione viene effettuata dal modulo $src/IP.v$}
+
+    \item Prepara l'output della permutazione per il primo round suddividendolo in due meta' ($L_{n-1}$ e $R_{n-1}$)
+    \item Esegue i 16 round di crittografia. Per ogni round:
+        \begin{itemize}
+            \item Seleziona la $K_n$ del round $n$ (round attuale)
+
+                \alertinfo{Viene utilizzato il modulo $src/K\_selector.v$}
+
+            \item Calcola $L_n$ ed $R_n$:
+
+                $$L_n = R_{n-1}$$
+                $$R_n = L_{n-1} \XOR f(R_{n-1}, K_n)$$
+                \alertinfo{$f(R_{n-1}, K_n)$ viene calcolato dal modulo $src/f.v$}
+            \item Passa al round successivo incrementando $n$ e memorizzando $L$ in $L_{n-1}$ e $R$ in $R_{n-1}$
+        \end{itemize}
+
+    \item Esegue la permutazione finale sull'output del round 16. (Dove l'output e' dato dalla concatenazione $R_{16}$ + $L_{16}$, e non $L_x$ + $R_x$ come per i round precedenti)
         
-          \alertinfo{Il segnale $read\_part1$ verra' resettato per poter riconoscere quando avverra' la memorizzazione della prossima prima parte del messaggio.}
+        \alertinfo{La permutazione viene effettuata dal modulo $src/inverse\_IP.v$}
+    \item Manda in uscita il messaggio cifrato, output della permutazione finale, sul segnale $enc\_msg$ e imposta il segnale $done$ a 1 per indicare che l'operazione e' conclusa.
+        
+          \alertinfo{Il segnale $read\_part1$ verrà resettato per poter riconoscere quando avverrà la memorizzazione della prossima prima parte del messaggio.}
 
     \item A questo punto la FSM torna in attesa che in ingresso sia presente la prima parte del messaggio.
 \end{itemize}
 
-\includesvg{assets/des_fsm}
+\begin{figure}
+    \includesvg[width=6in]{assets/des_fsm}
+\end{figure}
+
+\clearpage
 
 \section{Simulazione e test dei moduli Verilog}
 Per simulare i moduli Verilog si e' deciso di optare per il simulatore Icarus Verilog e per visualizzare le forme d'onda esportate in formato VCD GTKwave.
@@ -149,14 +170,14 @@ Per simulare i moduli Verilog si e' deciso di optare per il simulatore Icarus Ve
 Per i test e' stato utilizzato il framework cocotb per il linguaggio di programmazione Python.
 Per lanciare i test con cocotb occorre eseguire il $Makefile$ nella cartella $tests$ con il comando $make$.
 
-Se si desidera visualizzare le forme d'onda create dai test e' necessario eseguire singolarmente o il test del datapath (con il comando $make$ $test\_DES$) o della FSMD (con il comando $make$ $test\_FSMD$)
+Se si desidera visualizzare le forme d'onda create dai test e' necessario eseguire singolarmente il test della FSMD (con il comando $make$ $test\_FSMD$)
 e poi aprire il file VCD con GTKwave con il comando "$gtkwave <nomefile>.vcd$"
 
 Inoltre nella cartella $tests$ sono presenti delle semplici test bench in formato Verilog.
 
 Per eseguirle occorre compilare i moduli e poi eseguire la simulazione:
 \begin{verbatim}
-    iverilog -c DES_modules.txt # oppure FSMD_modules.txt
+    iverilog -c FSMD_modules.txt
     vvp a.out
 \end{verbatim}
 
@@ -175,7 +196,7 @@ Per programmare la scheda e' necessario utilizzare il software Xilinx Vivado per
     \item Creare il Block Design per interfacciare la IP con la APU della scheda.
     
           \alertinfo{Vivado permette di collegare automaticamente le IP cliccando su "Run Block Automation" e "Run Connection Automation"}
-    \item Creare un wrapper HDL: questo wrapper al suo interno gestira' APU, IP (con all'interno la FSMD) e il modulo che si occupa di resettare la board.
+    \item Creare un wrapper HDL: questo wrapper al suo interno gestirà APU, IP (con all'interno la FSMD) e il modulo che si occupa di resettare la board.
     \item Generare il Bitstream ($system.bit$)
     \item Esportare il Bitstream e il Block Design ($system.tcl$)
 \end{itemize}
@@ -272,13 +293,13 @@ Prima di utilizzare lo script occorre generare i file $system.bit$ e $system.tcl
 Lo script Python $des.py$:
 \begin{itemize}
     \item Riceve come argomento da linea di comando un messaggio da cifrare.
-    \item Suddivide il messaggio in blocchi da 64 bit poiche' l'algoritmo DES permette di cifrare 64 bit di dati.
+    \item Suddivide il messaggio in blocchi da 64 bit poiché l'algoritmo DES permette di cifrare 64 bit di dati.
 
-          \alertinfo{Se l'ultimo blocco, quello piu' a destra, e' composto da meno di 64 bit questo verra' esteso con NULL ($0x00$)}
-    \item Programma la FPGA con il file Bitstream $system.bit$ (questo necessita' del file contenente il block design: $system.tcl$)
+          \alertinfo{Se l'ultimo blocco, quello più a destra, e' composto da meno di 64 bit questo verrà esteso con NULL ($0x00$)}
+    \item Programma la FPGA con il file Bitstream $system.bit$ (questo necessità del file contenente il block design: $system.tcl$)
     \item Ogni blocco viene predisposto per essere adatto all'interfaccia del modulo FSMD.v e viene mandato in input alla FPGA.
 
-          Dopo aver ricevuto il blocco cifrato dalla FPGA questi vengono memorizzati in una lista finche' la FPGA non ha terminato di cifrare tutti i blocchi.
+          Dopo aver ricevuto il blocco cifrato dalla FPGA questi vengono memorizzati in una lista finché la FPGA non ha terminato di cifrare tutti i blocchi.
     \item A fine cifratura i blocchi cifrati vengono mostrati a video all'utente sia in formato binario sia in formato esadecimale.
 \end{itemize}
 
@@ -300,7 +321,7 @@ Per utilizzare lo script occorre:
             sudo python3.6 des.py '<messaggio>'
           \end{verbatim}
           \alertinfo{E' necessario eseguire lo script Python con sudo per poter aver l'accesso alla programmazione e al controllo dell'hardware della FPGA.}
-          \alertinfo{Se si utilizzano le virgolette ($"$) anziche' gli apici ($'$) occorre fare attenzione a caratteri interpretabili dalla shell (come ad esempio il dollaro) e eventualmente farne l'escape con la slash \textbackslash}
+          \alertinfo{Se si utilizzano le virgolette ($"$) anziché gli apici ($'$) occorre fare attenzione a caratteri interpretabili dalla shell (come ad esempio il dollaro) e eventualmente farne l'escape con la slash \textbackslash}
 \end{itemize}
 
 \section{Scelte progettuali}
@@ -308,7 +329,7 @@ Per utilizzare lo script occorre:
 \subsection{Input suddiviso in due stati differenti}
 A causa delle limitazioni di bit di input/output della FPGA la macchina a stati e' stata realizzata per ricevere in ingresso il messaggio da cifrare in due stati differenti (vengono letti 32 bit alla volta).
 
-Questo permette di impiegare 32 bit di messaggio e 2 di controllo anziche' utilizzare 64 bit di messaggio.
+Questo permette di impiegare 32 bit di messaggio e 2 di controllo anziché utilizzare 64 bit di messaggio.
 
 \subsection{Moduli $K_n$}
 I segnali K vengono restituiti da moduli differenti per permettere 
@@ -316,14 +337,14 @@ facilmente la modifica della chiave memorizzata in hardware
 generando con lo script python $utility/keys/gen\_kn.py$ i file 
 sorgente dei moduli Verilog.
 
-Dopo aver passato una chiave allo script tramite parametro questo generera' i moduli Verilog.
+Dopo aver passato una chiave allo script tramite parametro questo genererà i moduli Verilog.
 
 Dopo averli generati e' sufficiente sovrascrivere i file sorgente presenti nella cartella src e riprogrammare l'FPGA per attuare la modifica della chiave.
 
 \subsection{Generazione moduli da utility}
-Come per i Moduli $K_n$, le S-Boxes, i moduli che si occupano di permutare segnali $(IP, inverse\_IP, E, P)$ e le funzioni $f\_kn$ sono stati generati mediante script Python che risiedono nella cartella $utility$ per rimuovere la possibilita' di errore umano durante la realizzazione di quei moduli.
+Come per i Moduli $K_n$, le S-Boxes e i moduli che si occupano di permutare segnali $(IP, inverse\_IP, E, P)$ sono stati generati mediante script Python che risiedono nella cartella $utility$ per rimuovere la possibilità di errore umano durante la realizzazione di quei moduli.
 
-Tutte le permutazioni vengono descritte nelle documentazioni dell'algoritmo DES come matrici che devono essere lette da sinistra verso destra, dall'alto verso il basso: il primo bit in output corrisponde al bit numero $x$ presente nella prima posizione della matrice, il secondo bit in output sara' il bit in posizione 2, \dots
+Tutte le permutazioni vengono descritte nelle documentazioni dell'algoritmo DES come matrici che devono essere lette da sinistra verso destra, dall'alto verso il basso: il primo bit in output corrisponde al bit numero $x$ presente nella prima posizione della matrice, il secondo bit in output sarà il bit in posizione 2, \dots
 
 Esempio con la permutazione iniziale:
 $$
@@ -339,13 +360,13 @@ $$
 \end{matrix}
 $$
 
-Il primo bit in output sara' il bit in posizione 58 in input, il secondo bit in output sara' il bit in posizione 50, \dots
+Il primo bit in output sarà il bit in posizione 58 in input, il secondo bit in output sarà il bit in posizione 50, \dots
 \alertinfo{Gli indici degli input e degli output delle permutazioni partono da uno.}
 
 \alertinfo{E' possibile trovare i file delle matrici delle permutazioni (memorizzate come una lista di valori), usati dallo script Python $utility/permutations/gen\_permutations.py$ per generare i moduli, nella cartella $utility/permutations$}
 
 Anche le S-Boxes vengono descritte come matrici ma in quel caso bisogna prendere la sequenza di 6 bit in input e leggere il primo e l'ultimo bit come l'indice della riga e i bit centrali come indice della colonna.
-L'elemento selezionato sara' l'output della S-Box.
+L'elemento selezionato sarà l'output della S-Box.
 
 \alertinfo{Gli indici delle righe e delle colonne delle S-Boxes partono da zero.}
 
@@ -360,11 +381,11 @@ $$
 \end{matrix}
 $$
 
-Se l'input fosse $0 = 000000$, l'output si trova in posizione $00 = 0$ come riga e $0000 = 0$ come colonna: l'output sara' $14$.
+Se l'input fosse $0 = 000000$, l'output si trova in posizione $00 = 0$ come riga e $0000 = 0$ come colonna: l'output sarà $14$.
 
-Se l'input fosse $2 = 000010$, l'output si trova in posizione $00 = 0$ come riga e $0001 = 1$ come colonna: l'output sara' $4$.
+Se l'input fosse $2 = 000010$, l'output si trova in posizione $00 = 0$ come riga e $0001 = 1$ come colonna: l'output sarà $4$.
 
-Se l'input fosse $38 = 100110$, l'output si trova in posizione $10 = 2$ come riga e $0011 = 3$ come colonna: l'output sara' $8$.
+Se l'input fosse $38 = 100110$, l'output si trova in posizione $10 = 2$ come riga e $0011 = 3$ come colonna: l'output sarà $8$.
 
 \alertinfo{E' possibile trovare i file con le matrici delle S-Boxes, usati dallo script Python $utility/sboxes/gen\_sboxes.py$ per generare i moduli, nella cartella $utility/sboxes$}
 

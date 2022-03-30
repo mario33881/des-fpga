@@ -7,7 +7,7 @@ Implementazione in Verilog dell'algoritmo DES per la programmazione della scheda
 |![Block Diagram](docs/assets/block_diagram.png)|![FSMD Waves](docs/assets/fsmd_waves.png)|
 
 ## Dettagli implementativi
-Per la documentazione completa consultare il file [```Relazione.pdf```](Relazione.pdf)
+Per la documentazione completa consultare il file [```Relazione.pdf```](Relazione.pdf).
 
 ## Contenuto repository
 
@@ -22,7 +22,7 @@ Questo repository contiene le seguenti cartelle:
 
 * ```src```: contiene i sorgenti Verilog che implementano l'algoritmo DES.
 
-    Il Top Model e' contenuto nel file ```FSMD.v```: all'interno del modulo e' definita la macchina a stati (che gestisce input e output dell'algoritmo) e viene istanziato il datapath che svolge la parte crittografica dell'algoritmo
+    Il Top Model e' contenuto nel file ```FSMD.v```: all'interno del modulo e' definita la macchina a stati (che gestisce input e output dell'algoritmo) e vengono istanziati moduli che sono utilizzati dalla FSM per eseguire la parte crittografica dell'algoritmo.
 
 * ```tests```: contiene test e i Makefile per il framework [cocotb](https://docs.cocotb.org/en/stable/), e test bench semplici in Verilog.
 
@@ -43,6 +43,23 @@ Il repository contiene anche i seguenti file:
 * ```README.md```: questo documento
 
 * ```Relazione.pdf```: output della documentazione LaTeX della cartella ```docs```
+
+## Changelog
+
+**2022-03-30**:
+
+Seconda versione. Cambio di specifica: i round sono implementati all'interno della macchina a stati.
+
+Modifiche:
+* Rimosso il file verilog ```DES.v``` contenente l'implementazione asincrona dei round e i relativi test.
+* Rimossi i file f_kn.v (dove n va da 1 a 16) e lo script Python di generazione di quei moduli. Sono stati rimpiazzati dal multiplexer K_selector.
+* Permutazione iniziale e permutazione finale vengono gestiti, sempre dai moduli IP.v e inverse_IP.v, attraverso stati della FSM.
+* Aggiunti nuovi stati alla FSM per gestire permutazione iniziale, la selezione dei valori Kn, i 16 round e la permutazione finale.
+* Modificata la documentazione per contenere schemi e informazioni aggiornate.
+
+**2022-03-25** ([commit 52ae7b7](https://github.com/mario33881/des-fpga/tree/52ae7b71e112ac738339840e71f9935eefda7908)):
+
+Prima versione. L'implementazione dei round era asincrona.
 
 ## Autore
 [Zenaro Stefano (mario33881)](https://github.com/mario33881)
